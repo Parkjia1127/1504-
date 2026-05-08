@@ -3,71 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>파이썬 지역 필터링 사이트</title>
+    <title>지역별 재난문자 아카이브</title>
     
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
 
     <style>
-        body { font-family: 'Pretendard', sans-serif; background-color: #f5f7f9; padding: 40px; display: flex; flex-direction: column; align-items: center; }
-        .container { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 500px; }
-        h1 { color: #333; font-size: 24px; margin-bottom: 20px; }
+        body { font-family: 'Pretendard', sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .header { background: #e63946; color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; }
+        .search-box { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
         input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-        #output { margin-top: 20px; width: 100%; }
-        .list-item { background: #fff; border: 1px solid #eee; padding: 15px; margin-bottom: 10px; border-radius: 8px; transition: 0.2s; }
-        .list-item:hover { border-color: #3b82f6; }
-        .region-tag { display: inline-block; background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-bottom: 5px; }
+        .card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 5px solid #e63946; }
+        .card-time { font-size: 12px; color: #888; margin-bottom: 5px; }
+        .card-region { font-weight: bold; color: #e63946; margin-bottom: 5px; }
+        .card-msg { line-height: 1.5; font-size: 15px; word-break: break-all; }
+        #status { text-align: center; font-size: 14px; color: #666; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>📍 지역별 데이터 검색</h1>
-    <input type="text" id="search-input" placeholder="지역명을 입력하세요 (예: 서울, 부산)">
-    
-    <div id="output">
-        </div>
+    <div class="header">
+        <h1>🚨 재난문자 아카이브</h1>
+        <p>전국 재난문자 실시간 조회</p>
+    </div>
+
+    <div class="search-box">
+        <input type="text" id="search-input" placeholder="지역명을 입력하세요 (예: 서울, 익산, 부산)">
+    </div>
+
+    <div id="status">데이터를 불러오는 중입니다...</div>
+    <div id="output"></div>
 </div>
 
 <script type="py">
+    import asyncio
+    import json
     from pyscript import display, document
+    from pyodide.http import pyfetch
 
-    # 샘플 데이터 (파이썬 리스트 형식)
-    data_list = [
-        {"name": "강남 맛집", "region": "서울"},
-        {"name": "해운대 카페", "region": "부산"},
-        {"name": "홍대 버스킹", "region": "서울"},
-        {"name": "판교 테크노밸리", "region": "경기"},
-        {"name": "제주도 서핑", "region": "제주"},
-        {"name": "수원 화성", "region": "경기"}
-    ]
+    # 설정 값
+    SERVICE_KEY = "FI1NJ611XO5615BJ"
+    # 재난문자 API 주소 (행정안전부 긴급재난문자)
+    API_URL = f"https://apis.data.go.kr/1741000/DisasterMsg3/getDisasterMsg1?serviceKey={SERVICE_KEY}&pageNo=1&numOfRows=50&type=json"
 
-    def filter_data(event=None):
-        search_text = document.querySelector("#search-input").value
+    raw_data = []
+
+    async def fetch_disaster_data():
+        global raw_data
+        status_div = document.querySelector("#status")
+        
+        try:
+            # API 호출
+            response = await pyfetch(url=API_URL, method="GET")
+            if response.ok:
+                data = await response.json()
+                # API 응답 구조에 맞게 데이터 추출
+                raw_data = data.get('DisasterMsg', [{}, {'row': []}])[1].get('row', [])
+                status_div.innerText = "최신 50건의 데이터를 불러왔습니다."
+                render_data("")
+            else:
+                status_div.innerText = "API 연결에 실패했습니다."
+        except Exception as e:
+            status_div.innerText = f"오류 발생: {str(e)}"
+
+    def render_data(search_text):
         output_div = document.querySelector("#output")
-        output_div.innerHTML = "" # 이전 결과 지우기
+        output_div.innerHTML = ""
+        
+        # 검색어 필터링 (지역명 'location_name' 기준)
+        filtered = [item for item in raw_data if search_text in item.get('location_name', '')]
 
-        # 파이썬 리스트 컴프리헨션으로 필터링
-        filtered = [item for item in data_list if search_text in item['region']]
+        if not filtered:
+            output_div.innerHTML = "<p style='text-align:center;'>검색 결과가 없습니다.</p>"
+            return
 
         for item in filtered:
-            # HTML 요소 생성 및 출력
-            item_html = f"""
-            <div class="list-item">
-                <div class="region-tag">{item['region']}</div>
-                <div style="font-weight: 500;">{item['name']}</div>
+            card_html = f"""
+            <div class="card">
+                <div class="card-time">{item.get('create_date', '날짜 정보 없음')}</div>
+                <div class="card-region">[{item.get('location_name', '전국')}]</div>
+                <div class="card-msg">{item.get('msg', '내용 없음')}</div>
             </div>
             """
-            # PyScript의 display 기능을 사용하여 HTML 삽입
             div = document.createElement("div")
-            div.innerHTML = item_html
+            div.innerHTML = card_html
             output_div.appendChild(div)
 
-    # 입력창에 글자를 칠 때마다 실행되도록 연결
-    document.querySelector("#search-input").onkeyup = filter_data
+    def on_input_change(event):
+        search_text = document.querySelector("#search-input").value
+        render_data(search_text)
 
-    # 처음 시작할 때 전체 목록 보여주기
-    filter_data()
+    # 이벤트 연결
+    document.querySelector("#search-input").onkeyup = on_input_change
+
+    # 실행
+    asyncio.ensure_future(fetch_disaster_data())
 </script>
 
 </body>
