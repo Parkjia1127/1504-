@@ -3,104 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>지역별 재난문자 아카이브</title>
-    
-    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
-    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
-
+    <title>재난문자 아카이브</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
     <style>
-        body { font-family: 'Pretendard', sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; }
-        .header { background: #e63946; color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; }
-        .search-box { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-        .card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 5px solid #e63946; }
-        .card-time { font-size: 12px; color: #888; margin-bottom: 5px; }
-        .card-region { font-weight: bold; color: #e63946; margin-bottom: 5px; }
-        .card-msg { line-height: 1.5; font-size: 15px; word-break: break-all; }
-        #status { text-align: center; font-size: 14px; color: #666; margin-bottom: 10px; }
+        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .header { background: #d9534f; color: white; padding: 15px; border-radius: 5px; text-align: center; margin-bottom: 20px; }
+        input { width: 100%; padding: 10px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        .msg-box { border-bottom: 1px solid #eee; padding: 10px 0; }
+        .msg-info { color: #d9534f; font-weight: bold; font-size: 14px; }
+        #status { color: #888; font-size: 13px; margin-bottom: 10px; text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header">
-        <h1>🚨 재난문자 아카이브</h1>
-        <p>전국 재난문자 실시간 조회</p>
-    </div>
-
-    <div class="search-box">
-        <input type="text" id="search-input" placeholder="지역명을 입력하세요 (예: 서울, 익산, 부산)">
-    </div>
-
-    <div id="status">데이터를 불러오는 중입니다...</div>
+    <div class="header"><h1>🚨 재난문자 조회</h1></div>
+    <input type="text" id="searchInput" placeholder="지역명을 입력하세요 (예: 서울, 익산)">
+    <div id="status">시스템 준비 중...</div>
     <div id="output"></div>
 </div>
 
-<script type="py">
-    import asyncio
-    import json
-    from pyscript import display, document
-    from pyodide.http import pyfetch
+<script type="text/javascript">
+    async function main() {
+        let pyodide = await loadPyodide();
+        document.getElementById('status').innerText = "데이터 불러오는 중...";
 
-    # 설정 값
-    SERVICE_KEY = "FI1NJ611XO5615BJ"
-    # 재난문자 API 주소 (행정안전부 긴급재난문자)
-    API_URL = f"https://apis.data.go.kr/1741000/DisasterMsg3/getDisasterMsg1?serviceKey={SERVICE_KEY}&pageNo=1&numOfRows=50&type=json"
+        // 파이썬 코드 실행
+        await pyodide.runPythonAsync(`
+            import pyodide_http
+            import json
+            import pandas as pd # 만약의 확장을 위해
+            from js import document, window
 
-    raw_data = []
+            pyodide_http.patch_all() # 브라우저 HTTP 요청 제한 완화 시도
 
-    async def fetch_disaster_data():
-        global raw_data
-        status_div = document.querySelector("#status")
+            SERVICE_KEY = "FI1NJ611XO5615BJ"
+            url = f"https://apis.data.go.kr/1741000/DisasterMsg3/getDisasterMsg1?serviceKey={SERVICE_KEY}&pageNo=1&numOfRows=20&type=json"
+
+            async def fetch_data():
+                try:
+                    import requests
+                    response = requests.get(url, timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        rows = data['DisasterMsg'][1]['row']
+                        return json.dumps(rows)
+                    else:
+                        return "error_api"
+                except Exception as e:
+                    return str(e)
+
+            async def run():
+                res = await fetch_data()
+                window.renderJS(res)
+        `);
         
-        try:
-            # API 호출
-            response = await pyfetch(url=API_URL, method="GET")
-            if response.ok:
-                data = await response.json()
-                # API 응답 구조에 맞게 데이터 추출
-                raw_data = data.get('DisasterMsg', [{}, {'row': []}])[1].get('row', [])
-                status_div.innerText = "최신 50건의 데이터를 불러왔습니다."
-                render_data("")
-            else:
-                status_div.innerText = "API 연결에 실패했습니다."
-        except Exception as e:
-            status_div.innerText = f"오류 발생: {str(e)}"
+        pyodide.runPython("run()");
+    }
 
-    def render_data(search_text):
-        output_div = document.querySelector("#output")
-        output_div.innerHTML = ""
+    // 결과를 화면에 그리는 자바스크립트 함수
+    window.renderJS = (data) => {
+        const output = document.getElementById('output');
+        const status = document.getElementById('status');
         
-        # 검색어 필터링 (지역명 'location_name' 기준)
-        filtered = [item for item in raw_data if search_text in item.get('location_name', '')]
+        if (data === "error_api") {
+            status.innerText = "⚠️ API 키가 아직 활성화되지 않았거나 호출 한도를 초과했습니다.";
+            return;
+        }
+        
+        try {
+            const rows = JSON.parse(data);
+            status.innerText = `최신 문자 ${rows.length}건 확인됨`;
+            
+            function filterAndShow() {
+                const term = document.getElementById('searchInput').value;
+                output.innerHTML = "";
+                rows.filter(r => r.location_name.includes(term)).forEach(r => {
+                    output.innerHTML += \`
+                        <div class="msg-box">
+                            <div class="msg-info">[\${r.location_name}] \${r.create_date}</div>
+                            <div>\${r.msg}</div>
+                        </div>\`;
+                });
+            }
+            
+            document.getElementById('searchInput').addEventListener('keyup', filterAndShow);
+            filterAndShow();
+        } catch(e) {
+            status.innerText = "⚠️ 데이터 분석 오류: " + data;
+        }
+    }
 
-        if not filtered:
-            output_div.innerHTML = "<p style='text-align:center;'>검색 결과가 없습니다.</p>"
-            return
-
-        for item in filtered:
-            card_html = f"""
-            <div class="card">
-                <div class="card-time">{item.get('create_date', '날짜 정보 없음')}</div>
-                <div class="card-region">[{item.get('location_name', '전국')}]</div>
-                <div class="card-msg">{item.get('msg', '내용 없음')}</div>
-            </div>
-            """
-            div = document.createElement("div")
-            div.innerHTML = card_html
-            output_div.appendChild(div)
-
-    def on_input_change(event):
-        search_text = document.querySelector("#search-input").value
-        render_data(search_text)
-
-    # 이벤트 연결
-    document.querySelector("#search-input").onkeyup = on_input_change
-
-    # 실행
-    asyncio.ensure_future(fetch_disaster_data())
+    main();
 </script>
-
 </body>
 </html>
