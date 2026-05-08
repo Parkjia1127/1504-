@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>파이썬 지역 필터링 사이트</title>
+    
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #f5f7f9; padding: 40px; display: flex; flex-direction: column; align-items: center; }
+        .container { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 500px; }
+        h1 { color: #333; font-size: 24px; margin-bottom: 20px; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        #output { margin-top: 20px; width: 100%; }
+        .list-item { background: #fff; border: 1px solid #eee; padding: 15px; margin-bottom: 10px; border-radius: 8px; transition: 0.2s; }
+        .list-item:hover { border-color: #3b82f6; }
+        .region-tag { display: inline-block; background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📍 지역별 데이터 검색</h1>
+    <input type="text" id="search-input" placeholder="지역명을 입력하세요 (예: 서울, 부산)">
+    
+    <div id="output">
+        </div>
+</div>
+
+<script type="py">
+    from pyscript import display, document
+
+    # 샘플 데이터 (파이썬 리스트 형식)
+    data_list = [
+        {"name": "강남 맛집", "region": "서울"},
+        {"name": "해운대 카페", "region": "부산"},
+        {"name": "홍대 버스킹", "region": "서울"},
+        {"name": "판교 테크노밸리", "region": "경기"},
+        {"name": "제주도 서핑", "region": "제주"},
+        {"name": "수원 화성", "region": "경기"}
+    ]
+
+    def filter_data(event=None):
+        search_text = document.querySelector("#search-input").value
+        output_div = document.querySelector("#output")
+        output_div.innerHTML = "" # 이전 결과 지우기
+
+        # 파이썬 리스트 컴프리헨션으로 필터링
+        filtered = [item for item in data_list if search_text in item['region']]
+
+        for item in filtered:
+            # HTML 요소 생성 및 출력
+            item_html = f"""
+            <div class="list-item">
+                <div class="region-tag">{item['region']}</div>
+                <div style="font-weight: 500;">{item['name']}</div>
+            </div>
+            """
+            # PyScript의 display 기능을 사용하여 HTML 삽입
+            div = document.createElement("div")
+            div.innerHTML = item_html
+            output_div.appendChild(div)
+
+    # 입력창에 글자를 칠 때마다 실행되도록 연결
+    document.querySelector("#search-input").onkeyup = filter_data
+
+    # 처음 시작할 때 전체 목록 보여주기
+    filter_data()
+</script>
+
+</body>
+</html>
