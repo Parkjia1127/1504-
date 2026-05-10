@@ -3,99 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>재난문자 아카이브</title>
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <title>지역별 재난문자 아카이브</title>
     <style>
-        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .header { background: #d9534f; color: white; padding: 15px; border-radius: 5px; text-align: center; margin-bottom: 20px; }
-        input { width: 100%; padding: 10px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
-        .msg-box { border-bottom: 1px solid #eee; padding: 10px 0; }
-        .msg-info { color: #d9534f; font-weight: bold; font-size: 14px; }
-        #status { color: #888; font-size: 13px; margin-bottom: 10px; text-align: center; }
+        :root { --main-red: #e63946; --bg-gray: #f8f9fa; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-gray); padding: 20px; color: #333; }
+        .container { max-width: 500px; margin: 0 auto; }
+        .header { background: var(--main-red); color: white; padding: 25px; border-radius: 20px; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(230, 57, 70, 0.2); }
+        .search-box { position: sticky; top: 10px; z-index: 100; }
+        input { width: 100%; padding: 18px; border-radius: 15px; border: 1px solid #ddd; font-size: 16px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); outline: none; }
+        .status-badge { text-align: center; font-size: 13px; padding: 8px; border-radius: 20px; background: #eee; margin-bottom: 15px; }
+        .msg-card { background: white; padding: 18px; border-radius: 15px; margin-bottom: 15px; border-left: 6px solid var(--main-red); box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .tag { font-weight: bold; color: var(--main-red); display: block; margin-bottom: 5px; }
+        .time { font-size: 12px; color: #999; margin-bottom: 10px; }
+        .msg { line-height: 1.6; font-size: 15px; }
     </style>
 </head>
 <body>
+    <div class="container">
+        <div class="header">
+            <h1>🚨 재난문자 아카이브</h1>
+            <p>공공데이터 API 실시간 연동</p>
+        </div>
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="지역명을 입력하세요 (예: 익산, 서울)">
+        </div>
+        <div id="status" class="status-badge">데이터를 불러오는 중...</div>
+        <div id="output"></div>
+    </div>
 
-<div class="container">
-    <div class="header"><h1>🚨 재난문자 조회</h1></div>
-    <input type="text" id="searchInput" placeholder="지역명을 입력하세요 (예: 서울, 익산)">
-    <div id="status">시스템 준비 중...</div>
-    <div id="output"></div>
-</div>
+    <script>
+        const SERVICE_KEY = "FI1NJ611XO5615BJ";
+        const API_URL = `https://apis.data.go.kr/1741000/DisasterMsg3/getDisasterMsg1?serviceKey=${SERVICE_KEY}&pageNo=1&numOfRows=30&type=json`;
 
-<script type="text/javascript">
-    async function main() {
-        let pyodide = await loadPyodide();
-        document.getElementById('status').innerText = "데이터 불러오는 중...";
+        // API 미활성화 시 보여줄 시연용 가짜 데이터
+        const demoData = [
+            {location_name: "전라북도 익산시", create_date: "2026/05/10 20:30:00", msg: "[익산시청] 금일 야간 강풍 주의보 발령. 시설물 관리 및 안전사고에 유의하시기 바랍니다."},
+            {location_name: "서울특별시", create_date: "2026/05/10 19:15:00", msg: "[행정안전부] 오늘 밤 서울 지역 호우 예비특보. 하천변 산책로 출입을 자제 바랍니다."},
+            {location_name: "전라북도 전주시", create_date: "2026/05/10 18:00:00", msg: "[전북도청] 대기질 나쁨. 노약자 및 호흡기 질환자는 외출 시 마스크를 착용하세요."}
+        ];
 
-        // 파이썬 코드 실행
-        await pyodide.runPythonAsync(`
-            import pyodide_http
-            import json
-            import pandas as pd # 만약의 확장을 위해
-            from js import document, window
+        let disasterData = [];
 
-            pyodide_http.patch_all() # 브라우저 HTTP 요청 제한 완화 시도
-
-            SERVICE_KEY = "FI1NJ611XO5615BJ"
-            url = f"https://apis.data.go.kr/1741000/DisasterMsg3/getDisasterMsg1?serviceKey={SERVICE_KEY}&pageNo=1&numOfRows=20&type=json"
-
-            async def fetch_data():
-                try:
-                    import requests
-                    response = requests.get(url, timeout=5)
-                    if response.status_code == 200:
-                        data = response.json()
-                        rows = data['DisasterMsg'][1]['row']
-                        return json.dumps(rows)
-                    else:
-                        return "error_api"
-                except Exception as e:
-                    return str(e)
-
-            async def run():
-                res = await fetch_data()
-                window.renderJS(res)
-        `);
-        
-        pyodide.runPython("run()");
-    }
-
-    // 결과를 화면에 그리는 자바스크립트 함수
-    window.renderJS = (data) => {
-        const output = document.getElementById('output');
-        const status = document.getElementById('status');
-        
-        if (data === "error_api") {
-            status.innerText = "⚠️ API 키가 아직 활성화되지 않았거나 호출 한도를 초과했습니다.";
-            return;
-        }
-        
-        try {
-            const rows = JSON.parse(data);
-            status.innerText = `최신 문자 ${rows.length}건 확인됨`;
-            
-            function filterAndShow() {
-                const term = document.getElementById('searchInput').value;
-                output.innerHTML = "";
-                rows.filter(r => r.location_name.includes(term)).forEach(r => {
-                    output.innerHTML += \`
-                        <div class="msg-box">
-                            <div class="msg-info">[\${r.location_name}] \${r.create_date}</div>
-                            <div>\${r.msg}</div>
-                        </div>\`;
-                });
+        async function init() {
+            const status = document.getElementById('status');
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                if (data.DisasterMsg) {
+                    disasterData = data.DisasterMsg[1].row;
+                    status.innerText = "🟢 실시간 API 데이터 연결 성공";
+                } else { throw new Error(); }
+            } catch (e) {
+                disasterData = demoData;
+                status.innerText = "🟡 API 활성화 대기 중 (시연용 모드로 작동)";
+                status.style.color = "#856404";
             }
-            
-            document.getElementById('searchInput').addEventListener('keyup', filterAndShow);
-            filterAndShow();
-        } catch(e) {
-            status.innerText = "⚠️ 데이터 분석 오류: " + data;
+            render("");
         }
-    }
 
-    main();
-</script>
+        function render(filter) {
+            const output = document.getElementById('output');
+            output.innerHTML = "";
+            const filtered = disasterData.filter(item => item.location_name.includes(filter));
+            filtered.forEach(item => {
+                output.innerHTML += `<div class="msg-card"><span class="tag">[${item.location_name}]</span><div class="time">${item.create_date}</div><div class="msg">${item.msg}</div></div>`;
+            });
+        }
+
+        document.getElementById('searchInput').addEventListener('input', (e) => render(e.target.value));
+        init();
+    </script>
 </body>
 </html>
